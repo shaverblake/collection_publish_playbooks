@@ -1,0 +1,80 @@
+---
+# Build, publish, and approve a single collection or every collection beneath
+# src/<name>/. Hub credentials are read from environment variables:
+#   export AH_USERNAME="admin"
+#   export AH_PASSWORD="<password>"
+#
+# Usage:
+#   # Publish one collection to dev (default)
+#   ansible-playbook playbooks/publish_collection.yml -e collection_name=common_network
+#
+#   # Publish all collections to dev
+#   ansible-playbook playbooks/publish_collection.yml
+#
+#   # Publish to a specific environment
+#   ansible-playbook playbooks/publish_collection.yml -e target_env=qa
+#
+# This playbook ensures the collection namespace exists on Hub before
+# publishing. Each collection tarball is built from src/<name>/, then uploaded
+# to Hub's staging repository and auto-approved into the published repository.
+
+- name: Build and publish custom collections to Hub
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _target_env: "{{ target_env | default('dev') }}"
+    collections_dir: "{{ playbook_dir }}/../src"
+    build_dir: "{{ playbook_dir }}/../build"
+
+  tasks:
+    - name: Load project config
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../config/_config.yml"
+
+    - name: Load environment config
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../config/{{ _target_env }}.yml"
+
+    - name: Ensure namespace exists on Hub
+      ansible.hub.ah_namespace:
+        name: "{{ collection_namespace }}"
+        state: present
+        ah_host: "{{ hub_url }}"
+        validate_certs: "{{ hub_validate_certs }}"
+
+    - name: Ensure build directory exists
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Find collection directories
+      ansible.builtin.find:
+        paths: "{{ collections_dir }}"
+        file_type: directory
+        recurse: false
+      register: _all_collections
+
+    - name: Filter to requested collection (if specified)
+      ansible.builtin.set_fact:
+        _collections_to_publish: >-
+          {{
+            (_all_collections.files | selectattr('path', 'search', '/' ~ collection_name ~ '$') | list)
+            if collection_name is defined
+            else _all_collections.files
+          }}
+
+    - name: Fail if no collections found
+      ansible.builtin.fail:
+        msg: >-
+          No collection directories found{{ ' matching ' ~ collection_name if collection_name is defined else '' }}.
+          Collections must be valid collection directories with galaxy.yml.
+      when: _collections_to_publish | length == 0
+
+    - name: Build and publish each collection
+      ansible.builtin.include_tasks: _publish_one.yml
+      loop: "{{ _collections_to_publish }}"
+      loop_control:
+        loop_var: _coll
+        label: "{{ _coll.path | basename }}"
