@@ -5,6 +5,7 @@ version: 0.1.0
 authors:
  - config_team
 readme: README.md
+repository: 
 dependencies: {}
 tags:
   - aap
