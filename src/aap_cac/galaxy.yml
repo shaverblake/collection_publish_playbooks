@@ -2,6 +2,9 @@
 namespace: cac
 name: aap_cac 
 version: 0.1.0
+authors:
+ - config_team
+readme: README.md
 dependencies: {}
 tags:
   - aap
