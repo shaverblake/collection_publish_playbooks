@@ -2,19 +2,19 @@
 # Build, publish, and approve a single collection. Included by
 # publish_collection.yml. Expects _coll.path, hub_url, and hub_validate_certs.
 
-- name: Read collection metadata: {{ _coll.path | basename }}
+- name: "Read collection metadata: {{ _coll.path | basename }}"
   ansible.builtin.include_vars:
     file: "{{ _coll.path }}/galaxy.yml"
     name: _galaxy_meta
 
-- name: Build tarball: {{ _coll.path | basename }}
+- name: "Build tarball: {{ _coll.path | basename }}"
   ansible.hub.ah_build:
     path: "{{ _coll.path }}"
     output_path: "{{ build_dir }}"
     force: true
   register: _build_result
 
-- name: Publish to Hub: {{ _build_result.path | basename }}
+- name: "Publish to Hub: {{ _build_result.path | basename }}"
   ansible.hub.ah_collection_upload:
     path: "{{ _build_result.path }}"
     wait: true
@@ -22,7 +22,7 @@
     validate_certs: "{{ hub_validate_certs }}"
   register: _publish_result
 
-- name: Approve collection: {{ _galaxy_meta.namespace }}.{{ _galaxy_meta.name }}:{{ _galaxy_meta.version }}
+- name: "Approve collection: {{ _galaxy_meta.namespace }}.{{ _galaxy_meta.name }}:{{ _galaxy_meta.version }}"
   ansible.hub.ah_approval:
     namespace: "{{ _galaxy_meta.namespace }}"
     name: "{{ _galaxy_meta.name }}"
