@@ -1,0 +1,19 @@
+---
+- name: Load RBAC assignments from {{ _aap_rbac_file.path }}
+  ansible.builtin.include_vars:
+    file: "{{ _aap_rbac_file.path }}"
+    name: _aap_rbac_file_data
+
+- name: Validate RBAC assignment file structure
+  ansible.builtin.assert:
+    that:
+      - _aap_rbac_file_data.role_assignments is defined
+      - _aap_rbac_file_data.role_assignments is iterable
+    fail_msg: "{{ _aap_rbac_file.path }} must contain a top-level role_assignments list."
+
+- name: Apply each RBAC assignment
+  ansible.builtin.include_tasks: process_entry.yml
+  loop: "{{ _aap_rbac_file_data.role_assignments }}"
+  loop_control:
+    loop_var: _rbac_entry
+    label: "{{ _rbac_entry.team }} -> {{ _rbac_entry.role_definition }}"

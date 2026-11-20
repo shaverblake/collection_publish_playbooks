@@ -1,0 +1,82 @@
+---
+- name: Validate assignment entry
+  ansible.builtin.assert:
+    that:
+      - _rbac_entry.team is defined
+      - _rbac_entry.role_definition is defined
+      - _rbac_entry.resources is defined
+      - _rbac_entry.resources | length > 0
+      - aap_rbac_mode != 'cross_org' or _rbac_entry.owner_org is defined
+    fail_msg: >-
+      Each assignment needs team, role_definition, and resources. Cross-org
+      assignments also require owner_org.
+
+- name: Resolve consumer team {{ _rbac_entry.team }}
+  ansible.builtin.uri:
+    url: "{{ aap_hostname }}/api/gateway/v1/teams/?name={{ _rbac_entry.team | urlencode }}"
+    method: GET
+    user: "{{ aap_username }}"
+    password: "{{ aap_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_validate_certs }}"
+    status_code: 200
+  register: _rbac_team_lookup
+  no_log: true
+
+- name: Require consumer team
+  ansible.builtin.assert:
+    that: _rbac_team_lookup.json.count | int == 1
+    fail_msg: "Consumer team '{{ _rbac_entry.team }}' was not found (or is ambiguous)."
+
+- name: Set consumer team ID
+  ansible.builtin.set_fact:
+    _rbac_team_id: "{{ _rbac_team_lookup.json.results[0].id }}"
+
+- name: Resolve owner organization
+  ansible.builtin.uri:
+    url: "{{ aap_hostname }}/api/gateway/v1/organizations/?name={{ (_rbac_entry.owner_org | default('')) | urlencode }}"
+    method: GET
+    user: "{{ aap_username }}"
+    password: "{{ aap_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_validate_certs }}"
+    status_code: 200
+  register: _rbac_owner_org_lookup
+  when: aap_rbac_mode == 'cross_org'
+  no_log: true
+
+- name: Require owner organization
+  ansible.builtin.assert:
+    that: aap_rbac_mode != 'cross_org' or _rbac_owner_org_lookup.json.count | int == 1
+    fail_msg: "Owner organization '{{ _rbac_entry.owner_org }}' was not found (or is ambiguous)."
+
+- name: Set owner organization ID
+  ansible.builtin.set_fact:
+    _rbac_owner_org_id: >-
+      {{ _rbac_owner_org_lookup.json.results[0].id
+         if aap_rbac_mode == 'cross_org'
+         else _rbac_team_lookup.json.results[0].organization }}
+
+- name: Resolve role definition {{ _rbac_entry.role_definition }}
+  ansible.builtin.uri:
+    url: "{{ aap_hostname }}/api/gateway/v1/role_definitions/?name={{ _rbac_entry.role_definition | urlencode }}"
+    method: GET
+    user: "{{ aap_username }}"
+    password: "{{ aap_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_validate_certs }}"
+    status_code: 200
+  register: _rbac_role_lookup
+  no_log: true
+
+- name: Require role definition
+  ansible.builtin.assert:
+    that: _rbac_role_lookup.json.count | int == 1
+    fail_msg: "Role definition '{{ _rbac_entry.role_definition }}' was not found (or is ambiguous)."
+
+- name: Apply resource grants
+  ansible.builtin.include_tasks: process_grant.yml
+  loop: "{{ _rbac_entry.resources }}"
+  loop_control:
+    loop_var: _rbac_resource
+    label: "{{ _rbac_resource.type }}/{{ _rbac_resource.name }}"

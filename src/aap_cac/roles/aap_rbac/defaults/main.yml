@@ -1,0 +1,25 @@
+---
+# Platform Gateway connection settings.  Supply aap_username/aap_password
+# (or a bearer token by changing the auth arguments) from an encrypted source.
+aap_hostname: ""
+aap_username: ""
+aap_password: ""
+aap_validate_certs: true
+
+# Every *.yml file in this directory must contain a top-level
+# `role_assignments` list.  Files are processed in lexical order.
+aap_rbac_assignments_dir: "{{ playbook_dir }}/role_assignments"
+
+# cross_org: every entry must provide owner_org.
+# intra_org: owner_org is derived from the consumer team's organization.
+aap_rbac_mode: cross_org
+
+# Resource-name endpoints exposed through the gateway. Add a mapping here for
+# another controller resource type used by your role definitions.
+aap_rbac_resource_api_map:
+  job_templates: job_templates
+  workflow_job_templates: workflow_job_templates
+  credentials: credentials
+  inventories: inventories
+  projects: projects
+  organizations: organizations

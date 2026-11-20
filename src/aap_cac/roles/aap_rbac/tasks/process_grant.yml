@@ -1,0 +1,81 @@
+---
+- name: Validate resource grant
+  ansible.builtin.assert:
+    that:
+      - _rbac_resource.name is defined
+      - _rbac_resource.type is defined
+      - _rbac_resource.type in aap_rbac_resource_api_map
+    fail_msg: "Resource must specify a supported type and name."
+
+- name: Resolve resource {{ _rbac_resource.name }}
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_hostname }}/api/controller/v2/{{ aap_rbac_resource_api_map[_rbac_resource.type] }}/
+      ?name={{ _rbac_resource.name | urlencode }}&organization={{ _rbac_owner_org_id }}
+    method: GET
+    user: "{{ aap_username }}"
+    password: "{{ aap_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_validate_certs }}"
+    status_code: 200
+  register: _rbac_resource_lookup
+  no_log: true
+
+- name: Require resource
+  ansible.builtin.assert:
+    that: _rbac_resource_lookup.json.count | int == 1
+    fail_msg: >-
+      Resource '{{ _rbac_resource.name }}' ({{ _rbac_resource.type }}) was not
+      found uniquely in owner organization ID {{ _rbac_owner_org_id }}.
+
+- name: Set resource ID
+  ansible.builtin.set_fact:
+    _rbac_resource_id: "{{ _rbac_resource_lookup.json.results[0].id }}"
+
+- name: Find existing team role assignment
+  ansible.builtin.uri:
+    url: >-
+      {{ aap_hostname }}/api/gateway/v1/role_team_assignments/
+      ?team={{ _rbac_team_id }}&role_definition={{ _rbac_role_lookup.json.results[0].id }}
+      &object_id={{ _rbac_resource_id }}
+    method: GET
+    user: "{{ aap_username }}"
+    password: "{{ aap_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_validate_certs }}"
+    status_code: 200
+  register: _rbac_assignment_lookup
+  no_log: true
+
+- name: Create team role assignment
+  ansible.builtin.uri:
+    url: "{{ aap_hostname }}/api/gateway/v1/role_team_assignments/"
+    method: POST
+    user: "{{ aap_username }}"
+    password: "{{ aap_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_validate_certs }}"
+    status_code: 201
+    body_format: json
+    body:
+      team: "{{ _rbac_team_id | int }}"
+      role_definition: "{{ _rbac_role_lookup.json.results[0].id | int }}"
+      object_id: "{{ _rbac_resource_id | int }}"
+  when:
+    - (_rbac_entry.state | default('present')) == 'present'
+    - _rbac_assignment_lookup.json.count | int == 0
+  no_log: true
+
+- name: Remove team role assignment
+  ansible.builtin.uri:
+    url: "{{ aap_hostname }}/api/gateway/v1/role_team_assignments/{{ _rbac_assignment_lookup.json.results[0].id }}/"
+    method: DELETE
+    user: "{{ aap_username }}"
+    password: "{{ aap_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ aap_validate_certs }}"
+    status_code: 204
+  when:
+    - (_rbac_entry.state | default('present')) == 'absent'
+    - _rbac_assignment_lookup.json.count | int > 0
+  no_log: true

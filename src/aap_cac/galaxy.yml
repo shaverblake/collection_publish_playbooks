@@ -1,0 +1,11 @@
+---
+namespace: cac
+name: aap_cac 
+version: 0.1.0
+dependencies: {}
+tags:
+  - aap
+  - cac
+  - rbac
+  - sharing
+  - gateway

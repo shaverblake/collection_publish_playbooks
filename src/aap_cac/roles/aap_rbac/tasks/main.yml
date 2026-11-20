@@ -1,0 +1,27 @@
+---
+- name: Validate AAP RBAC role inputs
+  ansible.builtin.assert:
+    that:
+      - aap_hostname | length > 0
+      - aap_username | length > 0
+      - aap_password | length > 0
+      - aap_rbac_mode in ['cross_org', 'intra_org']
+    fail_msg: >-
+      Set aap_hostname, aap_username, aap_password, and aap_rbac_mode
+      (cross_org or intra_org) before applying RBAC assignments.
+  no_log: true
+
+- name: Find RBAC assignment files
+  ansible.builtin.find:
+    paths: "{{ aap_rbac_assignments_dir }}"
+    patterns: "*.yml,*.yaml"
+    file_type: file
+    recurse: false
+  register: _aap_rbac_assignment_files
+
+- name: Apply RBAC assignment files
+  ansible.builtin.include_tasks: process_file.yml
+  loop: "{{ _aap_rbac_assignment_files.files | sort(attribute='path') }}"
+  loop_control:
+    loop_var: _aap_rbac_file
+    label: "{{ _aap_rbac_file.path }}"
