@@ -20,7 +20,6 @@
     wait: true
     ah_host: "{{ hub_url }}"
     validate_certs: "{{ hub_validate_certs }}"
-    repository: published
   register: _publish_result
 
 - name: "Approve collection: {{ _galaxy_meta.namespace }}.{{ _galaxy_meta.name }}:{{ _galaxy_meta.version }}"
